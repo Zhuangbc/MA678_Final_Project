@@ -10,7 +10,7 @@ urlcolor: blue
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE,fig.align  = 'center')
-pacman::p_load("tidyverse","gridExtra","arm","rstanarm","magrittr","kableExtra")
+pacman::p_load("tidyverse","gridExtra","arm","rstanarm","magrittr","kableExtra","bayesplot","brant")
 ```
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
@@ -32,6 +32,31 @@ rest <- rest %>%
                  )
 ```
 
+```{r,include=FALSE}
+fit5 <- readRDS("MLCM.rds")
+x <- ranef(fit5)$cityId
+intercept <- x[1:46]
+flavor <- x[185:230]
+enviornment <- x[369:414]
+service <- x[553:598]
+# a <- mean(intercept)
+# asd <- sd(intercept)
+# b <- mean(flavor)
+# bsd <- sd(flavor)
+# c <- mean(enviornment)
+# csd <- sd(enviornment)
+# d <- mean(service)
+# dsd <- sd(service)
+
+tmp <- data.frame(flavor = flavor,enviornment=enviornment,service=service)
+
+tmp <- pivot_longer(tmp,cols = c(1:3),names_to = "type",values_to = "value")
+
+tmp2 <- tmp %>%
+        group_by(type) %>%
+        summarise(value2 = round(mean(value),2))
+```
+
 # 1 Abstract
 *DianPing* is a widely used review website. Customers give total score, flavor score, environment score and service score to restaurants. Total score is the most important criterion when people are selecting restaurants. We developed a mutilevel ordinal logistic model to assess how flavor score, environment score and service score attribute to the total score. Results showed that all ratings have positive effect on total score and flavor rating attributes most. Results also showed that rating effects vary between cities. Including more data may improve the model and give us preciser estimations.
 
@@ -42,7 +67,7 @@ This dataset is downloaded from [**The Wise Lab Dataset, Rutgers University**](h
 
 # 3 Methods
 ## 3.1 Data Cleaning and Selection
-Since all data were stored in the format of *json_line*, we cleaned the data using the tidyverse package in R. After data cleaning, we mananged to get a well-organized dataset. We deleted all meaningless data that have zero value for the total score. Then, our dataset included 89693 restaurants across 246 cities. However, it is very difficult and time-consuming to fit such a large dataset to our model. Therefore, we decided to shrink our dataset. We wanted to focus on major cities that have more restaurants. Therefore, we first deleted all the cities that have less than 100 restaurants. After that, our dataset included 86717 restaurants across 46 cities. Then, we sampled 4000 data from our dataset. Our final dataset included 4000 restaurants across 46 cities. In order to make sure that our sample does not lose the features of orginal dataset, we compared the distribution of four ratings before and after sampling. They gave us similar distribution. Results are shown in *Appendix: Figure*. Below is the description for each variable.
+Since all data were stored in the format of *json_line*, we cleaned the data using the tidyverse package in R. After data cleaning, we mananged to get a well-organized dataset. We deleted all meaningless data that have zero value for the total score. Then, our dataset included 89693 restaurants across 246 cities. However, it is very difficult and time-consuming to fit such a large dataset to our model. Therefore, we decided to shrink our dataset. We wanted to focus on major cities that have more restaurants. Therefore, we first deleted all the cities that have less than 100 restaurants. After that, our dataset included 86717 restaurants across 46 cities. Then, we sampled 4000 data from our dataset. Our final dataset included 4000 restaurants across 46 cities. In order to make sure that our sample does not lose the features of orginal dataset, we compared the distribution of four ratings before and after sampling. They gave us similar distribution. Results are shown in *Appendix: Figure 3 and 4*. Below is the description for each variable.
 
 Variable | Description                   | Remark
 -------- | ------------------------------ | --------------
@@ -57,31 +82,44 @@ service  | The service rating of the restaurant | 0 - 40 (integer)
 Dependent variable, the total score ranges from 0 to 5 with minimum division value to be 0.5. We decided to use multilevel model. There are two reasons.
 
 1. For the rating of restaurants, it is reasonable to consider it as close to complete pooling. Since for restaurants in different cities, they will not differ that much. Multilevel model is effective in this case and it allows variation between cities.\
-2. For many cities, they have very few restaurants. The number of restaurants in each city is shown in *Appendix: Figure*. It would be difficult to model using classical regression. Multilevel model can give us reasonable estimates even for cities with small sample sizes.
+2. For many cities, they have very few restaurants. The number of restaurants in each city is shown in *Appendix: Figure 5*. It would be difficult to model using classical regression. Multilevel model can give us reasonable estimates even for cities with small sample sizes.
 
-We first tried multilevel linear model. Our predictors are city ID, flavor rating, environment rating and service rating. However, the parallel lines in residual plot indicated that treating total score as a continuous variable is not suitable. Results are shown in *Appendix: Figure*. Therefore, we decided to treat total score as an ordered categorical variable and used multilevel ordinal logistic regression model. We ran Bayesian model using *brms* in R to build this model. We used *nominal test* to check the proportional odds assumption. We assessed the model using Bayesian posterior predictive checking. 
+We first tried multilevel linear model. Our predictors are city ID, flavor rating, environment rating and service rating. However, the parallel lines in residual plot indicated that treating total score as a continuous variable is not suitable. Results are shown in *Appendix: Figure 6*. Therefore, we decided to treat total score as an ordered categorical variable and used multilevel ordinal logistic regression model. We ran Bayesian model using *brms* in R to build this model. We decided to check the proportional odds assumption by comparing models with and without certain variable. We assessed the model using Bayesian posterior predictive checking. 
 
 # 4 Results
-## 4.1 Estimations and Assumptions
+## 4.1 Estimations
 Below is the model fitted in R.\
 $$brm(score \sim (1 + flavor + environment + service|cityId), data = rest\_sub,family=cumulative("logit"))$$
-We allowed all variables to vary between cities. In *Figure*, we can see the estimates $\pm$2 standard errors for intercepts, flavor rating, environment rating and service rating. 
-```{r,echo=FALSE,message=FALSE, warning=FALSE,results="asis",fig.cap="\\label{fig:figs} Density estimates of the total score data y and replicates",fig.width=10}
-pp_check(fit5)
+We allowed all variables to vary between cities. In *Figure 1*, we can see the estimates with one standard error confidence intervel for flavor rating, environment rating and service rating. All of the intervals lie on the right hand side of zero. They all have positive value. Among them, flavor has the highest value. One unit increase in flavor rating increase the log odds of having total score to be in category higher than 0.5 versus category 0.5 by on average 1.11. 
+```{r,echo=FALSE, message=FALSE, warning=FALSE,results="asis",fig.cap="\\label{fig:fig1} The predicted coefficients",fig.height=4}
+ggplot(tmp,mapping = aes(y = type,x = value,col = type))+
+    geom_errorbar(stat="summary")+
+    geom_point(tmp2,mapping = aes(y = type,x = value2,group = type))+
+    geom_text(tmp2,mapping = aes(y = type,x = value2,group = type,label=value2),vjust = -1)
 ```
 
 ## 4.2 Predictions
-We assess the model by Bayesian posterior predictive checking. *Figure* shows the overlaid density estimates of the data and the replicates. If our model fits the data well, we would expect that the data and the replicates will overlap perfectly. From the result, we can see that they almost overlap perfectly. Our model captures the patterns very well. Though, we still lose some features in those peaks. The overall prediction performance is great.
-```{r,echo=FALSE,message=FALSE, warning=FALSE,results="asis",fig.cap="\\label{fig:figs} Density estimates of the total score data y and replicates",fig.width=10}
+We assess the model by Bayesian posterior predictive checking. *Figure 2* shows the overlaid density estimates of the data and the replicates. If our model fits the data well, we would expect that the data and the replicates will overlap perfectly. From the result, we can see that they almost overlap perfectly. Our model captures the patterns very well. Though, we still lose some features in those peaks. The overall prediction performance is great.
+```{r,echo=FALSE,message=FALSE, warning=FALSE,results="asis",fig.cap="\\label{fig:fig2} Density estimates of the total score data y and replicates",fig.height=3}
 pp_check(fit5)
 ```
 
 # 5 Discussion
 In general, we would expect that all three ratings have positive effect on the total score and flavor rating plays the most important role in attributing to the total score. The results in section 4.1 line up with our expectation. The results also show us that environment rating and service rating have nearly equal effect on the total score. 
 
-Then, we look at the city level estimations. Estimations in city level tell us that this rating effects vary between cities. We look at the cities that flavor rating has a relatively large effect on the total score. In *Figure*, cities are sorted by the coefficient of flavor rating. The first three cities are . In China, these cities are all.
+Then, we look at the city level estimations. Estimations in city level tell us that this rating effects vary between cities especially for flavor rating which has the widest confidence interval. We look at the cities that flavor rating has a relatively large effect on the total score. In the table below, cities are sorted by the coefficient of flavor rating. The top five cities are *Beijing*, *Chongqing*, *Changchun*, *Hefei* and *Xiamen*. In China, except for *Xiamen*, the rest of them are all provincial capital. These cities are well developed and have high standard of living. Higher value of coefficients may indicate that people in these cities think flavor is more important.
+
+CityId | Flavor Coefficient 
+------ | ------------------
+110 | 2.022756
+9 | 1.820622
+2 | 1.805768
+70| 1.800442
+15| 1.799524
 
 Noticing that in order to fit a Bayesian model, we sampled the dataset. This may cause our estimations to be not that precise. Though it looks like that these three ratings are the most relevant variables, we can still include more variables to improve our model. For example, the type of restaurant and the favourable comment ratio. 
+
+We decided to check the proportional odds assumption by comparing models with and without certain variable. Though, we had sampled the dataset, fitting one model was still very time-consuming. In order to check the assumption, we have to fit extra three models. We didn't finish them. This is definitely an important part that we should show.
 
 # 6 Bibliography
 Wickham et al., (2019). Welcome to the tidyverse. Journal of Open Source Software, 4(43), 1686, https://doi.org/10.21105/joss.01686
@@ -96,8 +134,10 @@ Gelman, A., & Hill, J. (2006). Multilevel linear models: The basics. In Data Ana
 
 Gelman, A., Hill, J., & Vehtari, A. (2020). Assumptions, diagnostics, and model evaluation. In Regression and Other Stories (Analytical Methods for Social Research, pp. 153-182).
 
+\newpage
+
 # 7 Appendix
-```{r,echo=FALSE,message=FALSE, warning=FALSE,results="asis",fig.cap="\\label{fig:figs} Distribution of overall rating, flavor rating, environment rating and service rating before sampling"}
+```{r,echo=FALSE,message=FALSE, warning=FALSE,results="asis",fig.cap="\\label{fig:fig3} Distribution of overall rating, flavor rating, environment rating and service rating before sampling"}
 #Score
 p_score <- ggplot(rest)+
               geom_bar(aes(x=score))+
@@ -121,7 +161,7 @@ p_service <- ggplot(rest)+
 grid.arrange(p_score,p_flavor,p_environment,p_service,ncol = 2)
 ```
 
-```{r,echo=FALSE,message=FALSE, warning=FALSE,results="asis",fig.cap="\\label{fig:figs} Distribution of overall rating, flavor rating, environment rating and service rating after sampling"}
+```{r,echo=FALSE,message=FALSE, warning=FALSE,results="asis",fig.cap="\\label{fig:fig4} Distribution of overall rating, flavor rating, environment rating and service rating after sampling"}
 #Score
 p_score <- ggplot(rest_sub)+
               geom_bar(aes(x=score))+
@@ -145,7 +185,7 @@ p_service <- ggplot(rest_sub)+
 grid.arrange(p_score,p_flavor,p_environment,p_service,ncol = 2)
 ```
 
-```{r,echo=FALSE,message=FALSE, warning=FALSE,results="asis",fig.cap="\\label{fig:figs} The number of restaurants in each city"}
+```{r,echo=FALSE,message=FALSE, warning=FALSE,results="asis",fig.cap="\\label{fig:fig5} The number of restaurants in each city"}
 ggplot(data = rest_sub)+
   geom_bar(aes(x = cityId))+
   ylab("number of restaurants")+
@@ -154,7 +194,7 @@ ggplot(data = rest_sub)+
         axis.ticks.x = element_blank())
 ```
 
-```{r,echo=FALSE,message=FALSE, warning=FALSE,results="asis",fig.cap="\\label{fig:figs} Residual plot and Q-Q plot of linear mixed effects model"}
+```{r,echo=FALSE,message=FALSE, warning=FALSE,results="asis",fig.cap="\\label{fig:fig6} Residual plot and Q-Q plot of linear mixed effects model"}
 #Model
 rest_sub <- rest_sub %>%
              mutate(score = as.double(score))

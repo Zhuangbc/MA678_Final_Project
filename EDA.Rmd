@@ -66,10 +66,10 @@ rest100_count %>% arrange(desc(n))
 
 
 #Sample dataset
-set.seed(1)
+set.seed(23)
 rest0.5 <- rest100[rest100$score=="0.5",]
 tmp <- rest100[rest100$score!="0.5",]
-index <- sample(1:nrow(tmp),994)
+index <- sample(1:nrow(tmp),3994)
 rest_sub <- tmp[index,]
 rest_sub <- rbind(rest_sub,rest0.5)
 
@@ -198,6 +198,14 @@ pp_check(fit4)
 
 ```{r}
 fit5 <- brm(score ~ (1 + flavor + environment + service| cityId), data = rest_sub,family=cumulative("logit"))
+
+saveRDS(fit5,"MLCM.rds")
+```
+
+```{r}
+pp_check(fit5)
+
+city_new[city_new$cityId %in% c("110","15","2","70","9"),]
 ```
 
 
