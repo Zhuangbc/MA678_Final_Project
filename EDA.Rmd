@@ -1,0 +1,212 @@
+---
+title: "EDA"
+author: "Zijie Huang"
+date: "2020/12/6"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load("tidyverse","gridExtra","arm","rstan","rstanarm","ordinal","brms","MPDiR")
+```
+
+```{r}
+#Load all data
+load("businesses_cleaned.RData")
+load("city_cleaned.RData")
+```
+
+```{r}
+data_new4
+rest100
+rest
+city_new[city_new$cityId==4,]
+```
+```{r}
+#First filter only take the restaurants with score
+rest <- rest_new4 %>% 
+             filter(score!="0.0")
+
+#Change col type
+rest <- rest %>%
+          mutate(flavor = as.integer(flavor),
+                 environment = as.integer(environment),
+                 service = as.integer(service),
+                 cost = as.double(cost),
+                 score = as.double(score)
+                 )
+
+#Number of restaurants each city
+rest_count <- rest %>%
+               count(cityId)
+
+#desc order check number
+rest_count %>% arrange(desc(n))
+
+#Graph
+ggplot(data = rest)+
+  geom_bar(aes(x = cityId))
+
+#We only focus on the city with restaurant number greater than 100
+city100 <- rest_count %>%
+              filter(n >= 100) %>%
+              dplyr::select(cityId)
+
+#Select only the city >= 100 restaurants
+rest100 <- rest %>%
+            filter(cityId %in% city100$cityId)
+
+
+#Number of restaurants each city
+rest100_count <- rest100 %>%
+               count(cityId)
+
+#desc order check number
+rest100_count %>% arrange(desc(n))
+
+
+#Sample dataset
+set.seed(1)
+rest0.5 <- rest100[rest100$score=="0.5",]
+tmp <- rest100[rest100$score!="0.5",]
+index <- sample(1:nrow(tmp),994)
+rest_sub <- tmp[index,]
+rest_sub <- rbind(rest_sub,rest0.5)
+
+#Save subset
+#save(rest_sub,file="rest_cleaned_subset.RData")
+
+#Number of restaurants each city
+rest_sub_count <- rest_sub %>%
+               count(cityId)
+
+#desc order check number
+rest_sub_count %>% arrange(desc(n))
+
+#Graph
+ggplot(data = rest_sub)+
+  geom_bar(aes(x = cityId))
+
+```
+
+```{r}
+summary(rest)
+
+#Score
+p_score <- ggplot(rest)+
+              geom_bar(aes(x=score))
+
+#flavor
+p_flavor <- ggplot(rest)+
+              geom_bar(aes(x=flavor))
+
+#environment
+p_environment <- ggplot(rest)+
+              geom_bar(aes(x=environment))
+
+#service
+p_service <- ggplot(rest)+
+              geom_bar(aes(x=service))
+
+
+grid.arrange(p_score,p_flavor,p_environment,p_service,ncol = 2)
+```
+
+```{r}
+summary(rest_sub)
+
+#Score
+p_score <- ggplot(rest_sub)+
+              geom_bar(aes(x=score))
+
+#flavor
+p_flavor <- ggplot(rest_sub)+
+              geom_bar(aes(x=flavor))
+
+#environment
+p_environment <- ggplot(rest_sub)+
+              geom_bar(aes(x=environment))
+
+#service
+p_service <- ggplot(rest_sub)+
+              geom_bar(aes(x=service))
+
+
+grid.arrange(p_score,p_flavor,p_environment,p_service,ncol = 2)
+```
+
+
+```{r}
+#Model
+fit <- lmer(score ~ 1 + (flavor + environment + service + 1 | cityId), data = rest_sub)
+
+residual <- resid(fit)
+fitted <- predict(fit)
+
+qqnorm(residual,col="blue",main = "Linear Mixed Effects Model Q-Q Plot")
+qqline(residual,distribution = qnorm,col="red")
+
+plot(fitted,residual,col="blue",main = "Linear Mixed Effects Model Residual Plot",xlab = "fitted value",ylab = "residual")
+abline(0,0,col="red")
+```
+
+```{r}
+#model
+fit2 <- lmer(score ~ -1 + flavor + environment + service + (1 | cityId), data = rest)
+summary(fit2)
+
+residual <- resid(fit2)
+fitted <- predict(fit2)
+
+qqnorm(residual,col="blue",main = "Mean Severity Model1 Children Q-Q Plot")
+qqline(residual,distribution = qnorm,col="red")
+
+plot(fitted,residual,col="blue",main = "Mean Severity Model1 Children Residual Plot",xlab = "fitted value",ylab = "residual")
+abline(0,0,col="red")
+```
+
+```{r}
+rest <- rest %>%
+          mutate(flavor = as.integer(flavor),
+                 environment = as.integer(environment),
+                 service = as.integer(service),
+                 cost = as.double(cost),
+                 score = factor(score,ordered = TRUE),
+                 cityId = factor(cityId)
+                 )
+
+rest
+```
+
+```{r}
+fit3 <- clmm(score ~ -1 + (flavor + environment + service| cityId), data = rest[1:1000,],Hess=TRUE)
+summary(fit3)
+```
+
+```{r}
+fit4 <- brm(score ~ (1 + flavor + environment + service| cityId), data = rest[1:1000,],family=cumulative("logit"))
+summary(fit4)
+
+coef(fit4)
+
+predict(fit4)
+```
+
+```{r}
+pp_check(fit4)
+```
+
+```{r}
+fit5 <- brm(score ~ (1 + flavor + environment + service| cityId), data = rest_sub,family=cumulative("logit"))
+```
+
+
+
+
+
+
+
+
+
+
+
