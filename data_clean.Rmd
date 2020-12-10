@@ -1,0 +1,163 @@
+---
+title: "Test"
+author: "Zijie Huang"
+date: "2020/12/5"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load("tidyverse")
+```
+
+```{r}
+#Load Review Data
+data <- read.table("reviews.txt",header = TRUE,fill = TRUE)
+```
+
+```{r}
+#Bulid new data frame and only contain dump col
+data_new <- data.frame(dump = data$dump)
+##Only first 160 matters, cut comment
+data_new <- data_new %>%
+              mutate(dump2 = str_sub(dump,1,160))
+data_new2 <- data.frame(dump = data_new$dump2)
+##Split dump to the variables we want
+data_new3 <- data_new2 %>%
+              separate(dump,c("srcType","userId","rate","time","restId",
+                        "flavor","environment","service","cost","stage",
+                        "waiting","content"),sep = ",")
+```
+
+```{r}
+##Clean Each variable
+data_new4 <- data_new3 %>%
+                filter(srcType=="{\"srcType\":0")
+data_new4 <- data_new4 %>%
+                select(-1)
+
+data_new4 <- data_new4 %>%
+                separate(userId,c("t1","userId"),sep = ":")
+data_new4 <- data_new4 %>%
+                select(-t1)
+
+data_new4 <- data_new4 %>%
+                separate(rate,c("t2","rate"),sep = ":")
+data_new4 <- data_new4 %>%
+                select(-t2)
+
+data_new4 <- data_new4 %>%
+                separate(time,c("t3","time"),sep = ":")
+data_new4 <- data_new4 %>%
+                select(-t3)
+
+data_new4 <- data_new4 %>%
+                separate(restId,c("t4","restId"),sep = ":")
+data_new4 <- data_new4 %>%
+                select(-t4)
+
+data_new4 <- data_new4 %>%
+                separate(flavor,c("t5","flavor"),sep = ":")
+data_new4 <- data_new4 %>%
+                select(-t5)
+
+data_new4 <- data_new4 %>%
+                separate(environment,c("t6","environment"),sep = ":")
+data_new4 <- data_new4 %>%
+                select(-t6)
+
+data_new4 <- data_new4 %>%
+                separate(service,c("t7","service"),sep = ":")
+data_new4 <- data_new4 %>%
+                select(-t7)
+
+data_new4 <- data_new4 %>%
+                separate(cost,c("t8","cost"),sep = ":")
+data_new4 <- data_new4 %>%
+                select(-t8)
+
+data_new4 <- data_new4 %>%
+                separate(stage,c("t9","stage"),sep = ":")
+data_new4 <- data_new4 %>%
+                select(-t9)
+
+data_new4 <- data_new4 %>%
+                separate(waiting,c("t10","waiting"),sep = ":")
+data_new4 <- data_new4 %>%
+                select(-t10)
+
+data_new4 <- data_new4 %>%
+                select(-c(waiting,content))
+
+#Store cleaned data
+#save(data_new4,file = "review_cleaned.RData")
+```
+
+```{r}
+#Load Review Data
+#Read Chinese
+rest <- read.table("businesses.txt",header = FALSE,sep = "^",quote = "")
+```
+
+```{r}
+#Bulid new data frame and only contain dump col
+rest_new <- data.frame(dump = rest$V2)
+##Clean row
+a <- which(str_length(rest_new$dump)<=30)
+rest_new <- rest_new[-a,]
+rest_new <- as_tibble(rest_new)
+
+##Convert utf8
+rest_new2 <- rest_new %>%
+                mutate(value = enc2utf8(rest_new$value))
+
+##Split dump to the variables we want
+rest_new2 <- rest_new2 %>%
+              separate(value,c("v1","v2","v3","v4","v5","v6","v7",
+                        "v8","v9","v10","v11","v12","v13","v14",
+                        "v15","v16","v17","v18","v19","v20","v21","v22"),sep = "\",\"")
+
+##Clean row again
+b <- which(str_sub(rest_new2$v1,1,5)!=" {\"0\"")
+rest_new2 <- rest_new2[-b,]
+c <- which(str_sub(rest_new2$v19,1,4)=="19\":")
+rest_new2 <- rest_new2[c,]
+
+
+##Split subgroup
+rest_new3 <- rest_new2 %>%
+              separate(v1,c("v11","v12"),sep = "\":\"") %>%
+              separate(v3,c("v31","v32"),sep = "\":\"") %>%
+              separate(v4,c("v41","v42"),sep = "\":\"") %>%
+              separate(v5,c("v51","v52"),sep = "\":\"") %>%
+              separate(v6,c("v61","v62"),sep = "\":\"") %>%
+              separate(v7,c("v71","v72"),sep = "\":\"") %>%
+              separate(v19,c("v191","v192"),sep = "\":\"")
+
+##Select the variable we want
+rest_new4 <- rest_new3 %>%
+                select(c(v12,v32,v42,v52,v62,v72,v192))
+
+##Rename
+rest_new4 <- rest_new4 %>%
+                rename(restId = v12,
+                       cityId = v32,
+                       score = v42,
+                       flavor = v52,
+                       environment = v62,
+                       service = v72,
+                       cost = v192)
+
+#Save data
+#save(rest_new4,file = "businesses_cleaned.RData")
+```
+
+```{r}
+#Clean city
+city <- read.table("city.txt",header = FALSE, fileEncoding = "utf8")
+city_new <- city %>%
+              separate(V1,c("cityName","cityId"),sep = "=")
+
+## Save city
+#save(city_new,file = "city_cleaned.RData")
+```
